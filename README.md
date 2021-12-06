@@ -6,6 +6,11 @@ Written once, to be used everywhere.
 
 Completely framework-agnostic and database-agnostic.
 
+## This is a fork of the original library
+### Why is this needed?
+I'm maintaining this fork as an internal library for Allerta-VVF, since now I need to separate backend and frontend into different systems so I can't use cookies. Please note that this documentation is not updated.
+
+
 ## Why do I need this?
 
  * There are [tons](https://www.troyhunt.com/whos-who-of-bad-password-practices/) [of](https://blog.codinghorror.com/password-rules-are-bullshit/) [websites](https://badpasswordpolicies.tumblr.com/) with weak authentication systems. Don’t build such a site.
