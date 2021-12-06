@@ -637,12 +637,12 @@ Here’s how to use this library with your own tables for custom user informatio
             return null;
         }
 
-        if (!isset($_SESSION['_internal_user_info'])) {
+        if (!isset($this->user_info['_internal_user_info'])) {
             // TODO: load your custom user information and assign it to the session variable below
-            // $_SESSION['_internal_user_info'] = ...
+            // $this->user_info['_internal_user_info'] = ...
         }
 
-        return $_SESSION['_internal_user_info'];
+        return $this->user_info['_internal_user_info'];
     }
     ```
 

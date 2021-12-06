@@ -9,8 +9,7 @@
 namespace Delight\Auth;
 
 use Delight\Base64\Base64;
-use Delight\Cookie\Cookie;
-use Delight\Cookie\Session;
+use Lcobucci\JWT\Configuration;
 use Delight\Db\PdoDatabase;
 use Delight\Db\PdoDsn;
 use Delight\Db\Throwable\Error;
@@ -18,10 +17,6 @@ use Delight\Db\Throwable\IntegrityConstraintViolationException;
 
 /** Component that provides all features and utilities for secure authentication of individual users */
 final class Auth extends UserManager {
-
-	const COOKIE_PREFIXES = [ Cookie::PREFIX_SECURE, Cookie::PREFIX_HOST ];
-	const COOKIE_CONTENT_SEPARATOR = '~';
-
 	/** @var string the user's current IP address */
 	private $ipAddress;
 	/** @var bool whether throttling should be enabled (e.g. in production) or disabled (e.g. during development) */
@@ -29,44 +24,31 @@ final class Auth extends UserManager {
 	/** @var int the interval in seconds after which to resynchronize the session data with its authoritative source in the database */
 	private $sessionResyncInterval;
 	/** @var string the name of the cookie used for the 'remember me' feature */
-	private $rememberCookieName;
+	private $rememberCookieName = "";
 
 	/**
 	 * @param PdoDatabase|PdoDsn|\PDO $databaseConnection the database connection to operate on
+	 * @param Configurator $JWTconfig the configuration for the JWT library
 	 * @param string|null $ipAddress (optional) the IP address that should be used instead of the default setting (if any), e.g. when behind a proxy
 	 * @param string|null $dbTablePrefix (optional) the prefix for the names of all database tables used by this component
 	 * @param bool|null $throttling (optional) whether throttling should be enabled (e.g. in production) or disabled (e.g. during development)
 	 * @param int|null $sessionResyncInterval (optional) the interval in seconds after which to resynchronize the session data with its authoritative source in the database
 	 * @param string|null $dbSchema (optional) the schema name for all database tables used by this component
 	 */
-	public function __construct($databaseConnection, $ipAddress = null, $dbTablePrefix = null, $throttling = null, $sessionResyncInterval = null, $dbSchema = null) {
-		parent::__construct($databaseConnection, $dbTablePrefix, $dbSchema);
+	public function __construct($databaseConnection, $JWTconfig, $ipAddress = null, $dbTablePrefix = null, $throttling = null, $sessionResyncInterval = null, $dbSchema = null) {
+		parent::__construct($databaseConnection, $JWTconfig, $dbTablePrefix, $dbSchema);
 
 		$this->ipAddress = !empty($ipAddress) ? $ipAddress : (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null);
 		$this->throttling = isset($throttling) ? (bool) $throttling : true;
 		$this->sessionResyncInterval = isset($sessionResyncInterval) ? ((int) $sessionResyncInterval) : (60 * 5);
-		$this->rememberCookieName = self::createRememberCookieName();
 
-		$this->initSessionIfNecessary();
 		$this->enhanceHttpSecurity();
 
-		$this->processRememberDirective();
 		$this->resyncSessionIfNecessary();
 	}
 
-	/** Initializes the session and sets the correct configuration */
+	/** Not yet necessary. */
 	private function initSessionIfNecessary() {
-		if (\session_status() === \PHP_SESSION_NONE) {
-			// use cookies to store session IDs
-			\ini_set('session.use_cookies', 1);
-			// use cookies only (do not send session IDs in URLs)
-			\ini_set('session.use_only_cookies', 1);
-			// do not send session IDs in URLs
-			\ini_set('session.use_trans_sid', 0);
-
-			// start the session (requests a cookie to be written on the client)
-			@Session::start();
-		}
 	}
 
 	/** Improves the application's security over HTTP(S) by setting specific headers */
@@ -88,70 +70,20 @@ final class Auth extends UserManager {
 		}
 	}
 
-	/** Checks if there is a "remember me" directive set and handles the automatic login (if appropriate) */
+	/** Not yet necessary. */
 	private function processRememberDirective() {
-		// if the user is not signed in yet
-		if (!$this->isLoggedIn()) {
-			// if there is currently no cookie for the 'remember me' feature
-			if (!isset($_COOKIE[$this->rememberCookieName])) {
-				// if an old cookie for that feature from versions v1.x.x to v6.x.x has been found
-				if (isset($_COOKIE['auth_remember'])) {
-					// use the value from that old cookie instead
-					$_COOKIE[$this->rememberCookieName] = $_COOKIE['auth_remember'];
-				}
-			}
-
-			// if a remember cookie is set
-			if (isset($_COOKIE[$this->rememberCookieName])) {
-				// assume the cookie and its contents to be invalid until proven otherwise
-				$valid = false;
-
-				// split the cookie's content into selector and token
-				$parts = \explode(self::COOKIE_CONTENT_SEPARATOR, $_COOKIE[$this->rememberCookieName], 2);
-
-				// if both selector and token were found
-				if (!empty($parts[0]) && !empty($parts[1])) {
-					try {
-						$rememberData = $this->db->selectRow(
-							'SELECT a.user, a.token, a.expires, b.email, b.username, b.status, b.roles_mask, b.force_logout FROM ' . $this->makeTableName('users_remembered') . ' AS a JOIN ' . $this->makeTableName('users') . ' AS b ON a.user = b.id WHERE a.selector = ?',
-							[ $parts[0] ]
-						);
-					}
-					catch (Error $e) {
-						throw new DatabaseError($e->getMessage());
-					}
-
-					if (!empty($rememberData)) {
-						if ($rememberData['expires'] >= \time()) {
-							if (\password_verify($parts[1], $rememberData['token'])) {
-								// the cookie and its contents have now been proven to be valid
-								$valid = true;
-
-								$this->onLoginSuccessful($rememberData['user'], $rememberData['email'], $rememberData['username'], $rememberData['status'], $rememberData['roles_mask'], $rememberData['force_logout'], true);
-							}
-						}
-					}
-				}
-
-				// if the cookie or its contents have been invalid
-				if (!$valid) {
-					// mark the cookie as such to prevent any further futile attempts
-					$this->setRememberCookie('', '', \time() + 60 * 60 * 24 * 365.25);
-				}
-			}
-		}
 	}
 
 	private function resyncSessionIfNecessary() {
 		// if the user is signed in
 		if ($this->isLoggedIn()) {
 			// the following session field may not have been initialized for sessions that had already existed before the introduction of this feature
-			if (!isset($_SESSION[self::SESSION_FIELD_LAST_RESYNC])) {
-				$_SESSION[self::SESSION_FIELD_LAST_RESYNC] = 0;
+			if (!isset($this->user_info[self::FIELD_LAST_RESYNC])) {
+				$this->user_info[self::FIELD_LAST_RESYNC] = 0;
 			}
 
 			// if it's time for resynchronization
-			if (($_SESSION[self::SESSION_FIELD_LAST_RESYNC] + $this->sessionResyncInterval) <= \time()) {
+			if (($this->user_info[self::FIELD_LAST_RESYNC] + $this->sessionResyncInterval) <= \time()) {
 				// fetch the authoritative data from the database again
 				try {
 					$authoritativeData = $this->db->selectRow(
@@ -166,25 +98,25 @@ final class Auth extends UserManager {
 				// if the user's data has been found
 				if (!empty($authoritativeData)) {
 					// the following session field may not have been initialized for sessions that had already existed before the introduction of this feature
-					if (!isset($_SESSION[self::SESSION_FIELD_FORCE_LOGOUT])) {
-						$_SESSION[self::SESSION_FIELD_FORCE_LOGOUT] = 0;
+					if (!isset($this->user_info[self::FIELD_FORCE_LOGOUT])) {
+						$this->user_info[self::FIELD_FORCE_LOGOUT] = 0;
 					}
 
 					// if the counter that keeps track of forced logouts has been incremented
-					if ($authoritativeData['force_logout'] > $_SESSION[self::SESSION_FIELD_FORCE_LOGOUT]) {
+					if ($authoritativeData['force_logout'] > $this->user_info[self::FIELD_FORCE_LOGOUT]) {
 						// the user must be signed out
 						$this->logOut();
 					}
 					// if the counter that keeps track of forced logouts has remained unchanged
 					else {
 						// the session data needs to be updated
-						$_SESSION[self::SESSION_FIELD_EMAIL] = $authoritativeData['email'];
-						$_SESSION[self::SESSION_FIELD_USERNAME] = $authoritativeData['username'];
-						$_SESSION[self::SESSION_FIELD_STATUS] = (int) $authoritativeData['status'];
-						$_SESSION[self::SESSION_FIELD_ROLES] = (int) $authoritativeData['roles_mask'];
+						$this->user_info[self::FIELD_EMAIL] = $authoritativeData['email'];
+						$this->user_info[self::FIELD_USERNAME] = $authoritativeData['username'];
+						$this->user_info[self::FIELD_STATUS] = (int) $authoritativeData['status'];
+						$this->user_info[self::FIELD_ROLES] = (int) $authoritativeData['roles_mask'];
 
 						// remember that we've just performed the required resynchronization
-						$_SESSION[self::SESSION_FIELD_LAST_RESYNC] = \time();
+						$this->user_info[self::FIELD_LAST_RESYNC] = \time();
 					}
 				}
 				// if no data has been found for the user
@@ -329,10 +261,6 @@ final class Auth extends UserManager {
 	 * the user is allowed to perform some "dangerous" action, you should
 	 * use this method to confirm that the user is who they claim to be.
 	 *
-	 * For example, when a user has been remembered by a long-lived cookie
-	 * and thus {@see isRemembered} returns `true`, this means that the
-	 * user has not entered their password for quite some time anymore.
-	 *
 	 * @param string $password the user's password
 	 * @return bool whether the supplied password has been correct
 	 * @throws NotLoggedInException if the user is not currently signed in
@@ -399,15 +327,15 @@ final class Auth extends UserManager {
 			}
 
 			// remove all session variables maintained by this library
-			unset($_SESSION[self::SESSION_FIELD_LOGGED_IN]);
-			unset($_SESSION[self::SESSION_FIELD_USER_ID]);
-			unset($_SESSION[self::SESSION_FIELD_EMAIL]);
-			unset($_SESSION[self::SESSION_FIELD_USERNAME]);
-			unset($_SESSION[self::SESSION_FIELD_STATUS]);
-			unset($_SESSION[self::SESSION_FIELD_ROLES]);
-			unset($_SESSION[self::SESSION_FIELD_REMEMBERED]);
-			unset($_SESSION[self::SESSION_FIELD_LAST_RESYNC]);
-			unset($_SESSION[self::SESSION_FIELD_FORCE_LOGOUT]);
+			unset($this->user_info[self::FIELD_LOGGED_IN]);
+			unset($this->user_info[self::FIELD_USER_ID]);
+			unset($this->user_info[self::FIELD_EMAIL]);
+			unset($this->user_info[self::FIELD_USERNAME]);
+			unset($this->user_info[self::FIELD_STATUS]);
+			unset($this->user_info[self::FIELD_ROLES]);
+			unset($this->user_info[self::FIELD_REMEMBERED]);
+			unset($this->user_info[self::FIELD_LAST_RESYNC]);
+			unset($this->user_info[self::FIELD_FORCE_LOGOUT]);
 		}
 	}
 
@@ -429,15 +357,12 @@ final class Auth extends UserManager {
 		$this->forceLogoutForUserById($this->getUserId());
 
 		// the following session field may not have been initialized for sessions that had already existed before the introduction of this feature
-		if (!isset($_SESSION[self::SESSION_FIELD_FORCE_LOGOUT])) {
-			$_SESSION[self::SESSION_FIELD_FORCE_LOGOUT] = 0;
+		if (!isset($this->user_info[self::FIELD_FORCE_LOGOUT])) {
+			$this->user_info[self::FIELD_FORCE_LOGOUT] = 0;
 		}
 
 		// ensure that we will simply skip or ignore the next forced logout (which we have just caused) in the current session
-		$_SESSION[self::SESSION_FIELD_FORCE_LOGOUT]++;
-
-		// re-generate the session ID to prevent session fixation attacks (requests a cookie to be written on the client)
-		Session::regenerate(true);
+		$this->user_info[self::FIELD_FORCE_LOGOUT]++;
 
 		// if there had been an existing remember directive previously
 		if (isset($previousRememberDirectiveExpiry)) {
@@ -473,11 +398,7 @@ final class Auth extends UserManager {
 	 */
 	public function destroySession() {
 		// remove all session variables without exception
-		$_SESSION = [];
-		// delete the session cookie
-		$this->deleteSessionCookie();
-		// let PHP destroy the session
-		\session_destroy();
+		$this->user_info = [];
 	}
 
 	/**
@@ -507,18 +428,14 @@ final class Auth extends UserManager {
 		catch (Error $e) {
 			throw new DatabaseError($e->getMessage());
 		}
-
-		$this->setRememberCookie($selector, $token, $expires);
 	}
 
 	protected function deleteRememberDirectiveForUserById($userId, $selector = null) {
 		parent::deleteRememberDirectiveForUserById($userId, $selector);
-
-		$this->setRememberCookie(null, null, \time() - 3600);
 	}
 
 	/**
-	 * Sets or updates the cookie that manages the "remember me" token
+	 * Not yet necessary.
 	 *
 	 * @param string|null $selector the selector from the selector/token pair
 	 * @param string|null $token the token from the selector/token pair
@@ -526,39 +443,6 @@ final class Auth extends UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	private function setRememberCookie($selector, $token, $expires) {
-		$params = \session_get_cookie_params();
-
-		if (isset($selector) && isset($token)) {
-			$content = $selector . self::COOKIE_CONTENT_SEPARATOR . $token;
-		}
-		else {
-			$content = '';
-		}
-
-		// save the cookie with the selector and token (requests a cookie to be written on the client)
-		$cookie = new Cookie($this->rememberCookieName);
-		$cookie->setValue($content);
-		$cookie->setExpiryTime($expires);
-		$cookie->setPath($params['path']);
-		$cookie->setDomain($params['domain']);
-		$cookie->setHttpOnly($params['httponly']);
-		$cookie->setSecureOnly($params['secure']);
-		$result = $cookie->save();
-
-		if ($result === false) {
-			throw new HeadersAlreadySentError();
-		}
-
-		// if we've been deleting the cookie above
-		if (!isset($selector) || !isset($token)) {
-			// attempt to delete a potential old cookie from versions v1.x.x to v6.x.x as well (requests a cookie to be written on the client)
-			$cookie = new Cookie('auth_remember');
-			$cookie->setPath((!empty($params['path'])) ? $params['path'] : '/');
-			$cookie->setDomain($params['domain']);
-			$cookie->setHttpOnly($params['httponly']);
-			$cookie->setSecureOnly($params['secure']);
-			$cookie->delete();
-		}
 	}
 
 	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout, $remembered) {
@@ -578,24 +462,11 @@ final class Auth extends UserManager {
 	}
 
 	/**
-	 * Deletes the session cookie on the client
+	 * Not yet necessary.
 	 *
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	private function deleteSessionCookie() {
-		$params = \session_get_cookie_params();
-
-		// ask for the session cookie to be deleted (requests a cookie to be written on the client)
-		$cookie = new Cookie(\session_name());
-		$cookie->setPath($params['path']);
-		$cookie->setDomain($params['domain']);
-		$cookie->setHttpOnly($params['httponly']);
-		$cookie->setSecureOnly($params['secure']);
-		$result = $cookie->delete();
-
-		if ($result === false) {
-			throw new HeadersAlreadySentError();
-		}
 	}
 
 	/**
@@ -664,7 +535,7 @@ final class Auth extends UserManager {
 						// if the user has just confirmed an email address for their own account
 						if ($this->getUserId() === $confirmationData['user_id']) {
 							// immediately update the email address in the current session as well
-							$_SESSION[self::SESSION_FIELD_EMAIL] = $confirmationData['new_email'];
+							$this->user_info[self::FIELD_EMAIL] = $confirmationData['new_email'];
 						}
 					}
 
@@ -1475,7 +1346,7 @@ final class Auth extends UserManager {
 	 * @return boolean whether the user is logged in or not
 	 */
 	public function isLoggedIn() {
-		return isset($_SESSION) && isset($_SESSION[self::SESSION_FIELD_LOGGED_IN]) && $_SESSION[self::SESSION_FIELD_LOGGED_IN] === true;
+		return isset($this->user_info) && isset($this->user_info[self::FIELD_LOGGED_IN]) && $this->user_info[self::FIELD_LOGGED_IN] === true;
 	}
 
 	/**
@@ -1493,8 +1364,8 @@ final class Auth extends UserManager {
 	 * @return int the user ID
 	 */
 	public function getUserId() {
-		if (isset($_SESSION) && isset($_SESSION[self::SESSION_FIELD_USER_ID])) {
-			return $_SESSION[self::SESSION_FIELD_USER_ID];
+		if (isset($this->user_info) && isset($this->user_info[self::FIELD_USER_ID])) {
+			return $this->user_info[self::FIELD_USER_ID];
 		}
 		else {
 			return null;
@@ -1516,8 +1387,8 @@ final class Auth extends UserManager {
 	 * @return string the email address
 	 */
 	public function getEmail() {
-		if (isset($_SESSION) && isset($_SESSION[self::SESSION_FIELD_EMAIL])) {
-			return $_SESSION[self::SESSION_FIELD_EMAIL];
+		if (isset($this->user_info) && isset($this->user_info[self::FIELD_EMAIL])) {
+			return $this->user_info[self::FIELD_EMAIL];
 		}
 		else {
 			return null;
@@ -1530,8 +1401,8 @@ final class Auth extends UserManager {
 	 * @return string the display name
 	 */
 	public function getUsername() {
-		if (isset($_SESSION) && isset($_SESSION[self::SESSION_FIELD_USERNAME])) {
-			return $_SESSION[self::SESSION_FIELD_USERNAME];
+		if (isset($this->user_info) && isset($this->user_info[self::FIELD_USERNAME])) {
+			return $this->user_info[self::FIELD_USERNAME];
 		}
 		else {
 			return null;
@@ -1544,8 +1415,8 @@ final class Auth extends UserManager {
 	 * @return int the status as one of the constants from the {@see Status} class
 	 */
 	public function getStatus() {
-		if (isset($_SESSION) && isset($_SESSION[self::SESSION_FIELD_STATUS])) {
-			return $_SESSION[self::SESSION_FIELD_STATUS];
+		if (isset($this->user_info) && isset($this->user_info[self::FIELD_STATUS])) {
+			return $this->user_info[self::FIELD_STATUS];
 		}
 		else {
 			return null;
@@ -1637,10 +1508,10 @@ final class Auth extends UserManager {
 			return false;
 		}
 
-		if (isset($_SESSION) && isset($_SESSION[self::SESSION_FIELD_ROLES])) {
+		if (isset($this->user_info) && isset($this->user_info[self::FIELD_ROLES])) {
 			$role = (int) $role;
 
-			return (((int) $_SESSION[self::SESSION_FIELD_ROLES]) & $role) === $role;
+			return (((int) $this->user_info[self::FIELD_ROLES]) & $role) === $role;
 		}
 		else {
 			return false;
@@ -1697,17 +1568,12 @@ final class Auth extends UserManager {
 	}
 
 	/**
-	 * Returns whether the currently signed-in user has been remembered by a long-lived cookie
+	 * Not yet necessary.
 	 *
 	 * @return bool whether they have been remembered
 	 */
 	public function isRemembered() {
-		if (isset($_SESSION) && isset($_SESSION[self::SESSION_FIELD_REMEMBERED])) {
-			return $_SESSION[self::SESSION_FIELD_REMEMBERED];
-		}
-		else {
-			return null;
-		}
+		return false;
 	}
 
 	/**
@@ -1869,62 +1735,33 @@ final class Auth extends UserManager {
 	}
 
 	/**
-	 * Generates a unique cookie name for the given descriptor based on the supplied seed
+	 * Not yet necessary.
 	 *
 	 * @param string $descriptor a short label describing the purpose of the cookie, e.g. 'session'
 	 * @param string|null $seed (optional) the data to deterministically generate the name from
 	 * @return string
 	 */
 	public static function createCookieName($descriptor, $seed = null) {
-		// use the supplied seed or the current UNIX time in seconds
-		$seed = ($seed !== null) ? $seed : \time();
-
-		foreach (self::COOKIE_PREFIXES as $cookiePrefix) {
-			// if the seed contains a certain cookie prefix
-			if (\strpos($seed, $cookiePrefix) === 0) {
-				// prepend the same prefix to the descriptor
-				$descriptor = $cookiePrefix . $descriptor;
-			}
-		}
-
-		// generate a unique token based on the name(space) of this library and on the seed
-		$token = Base64::encodeUrlSafeWithoutPadding(
-			\md5(
-				__NAMESPACE__ . "\n" . $seed,
-				true
-			)
-		);
-
-		return $descriptor . '_' . $token;
+		return "";
 	}
 
 	/**
-	 * Generates a unique cookie name for the 'remember me' feature
+	 * Not yet necessary.
 	 *
 	 * @param string|null $sessionName (optional) the session name that the output should be based on
 	 * @return string
 	 */
 	public static function createRememberCookieName($sessionName = null) {
-		return self::createCookieName(
-			'remember',
-			($sessionName !== null) ? $sessionName : \session_name()
-		);
+		return "";
 	}
 
 	/**
-	 * Returns the selector of a potential locally existing remember directive
+	 * Not yet necessary.
 	 *
 	 * @return string|null
 	 */
 	private function getRememberDirectiveSelector() {
-		if (isset($_COOKIE[$this->rememberCookieName])) {
-			$selectorAndToken = \explode(self::COOKIE_CONTENT_SEPARATOR, $_COOKIE[$this->rememberCookieName], 2);
-
-			return $selectorAndToken[0];
-		}
-		else {
-			return null;
-		}
+		return null;
 	}
 
 	/**
@@ -1958,6 +1795,10 @@ final class Auth extends UserManager {
 		}
 
 		return null;
+	}
+
+	public function generateJWTtoken() {
+		return parent::issueToken()->toString();
 	}
 
 }

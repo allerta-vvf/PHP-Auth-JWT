@@ -27,13 +27,18 @@
 
 require __DIR__.'/../vendor/autoload.php';
 
-$db = new \PDO('mysql:dbname=php_auth;host=127.0.0.1;charset=utf8mb4', 'root', 'monkey');
+$db = new \PDO('mysql:dbname=php_auth;host=127.0.0.1;charset=utf8mb4', 'root', '');
 // or
 // $db = new \PDO('pgsql:dbname=php_auth;host=127.0.0.1;port=5432', 'postgres', 'monkey');
 // or
 // $db = new \PDO('sqlite:../Databases/php_auth.sqlite');
 
-$auth = new \Delight\Auth\Auth($db);
+$JWTconfig = Lcobucci\JWT\Configuration::forUnsecuredSigner(
+    // You may also override the JOSE encoder/decoder if needed by providing extra arguments here
+); //TODO: replace this with test configuration
+$JWTtokenOBJ = null;
+
+$auth = new \Delight\Auth\Auth($db, $JWTconfig);
 
 $result = \processRequestData($auth);
 
@@ -48,6 +53,7 @@ else {
 }
 
 function processRequestData(\Delight\Auth\Auth $auth) {
+	global $JWTtokenOBJ;
 	if (isset($_POST)) {
 		if (isset($_POST['action'])) {
 			if ($_POST['action'] === 'login') {
@@ -63,9 +69,11 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 				try {
 					if (isset($_POST['email'])) {
 						$auth->login($_POST['email'], $_POST['password'], $rememberDuration);
+						$JWTtokenOBJ = $auth->issueToken();
 					}
 					elseif (isset($_POST['username'])) {
 						$auth->loginWithUsername($_POST['username'], $_POST['password'], $rememberDuration);
+						$JWTtokenOBJ = $auth->issueToken();
 					}
 					else {
 						return 'either email address or username required';
@@ -592,6 +600,7 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 				if (isset($_POST['id'])) {
 					try {
 						$auth->admin()->logInAsUserById($_POST['id']);
+						$JWTtokenOBJ = $auth->issueToken();
 
 						return 'ok';
 					}
@@ -610,6 +619,7 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 				if (isset($_POST['email'])) {
 					try {
 						$auth->admin()->logInAsUserByEmail($_POST['email']);
+						$JWTtokenOBJ = $auth->issueToken();
 
 						return 'ok';
 					}
@@ -628,6 +638,7 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 				if (isset($_POST['username'])) {
 					try {
 						$auth->admin()->logInAsUserByUsername($_POST['username']);
+						$JWTtokenOBJ = $auth->issueToken();
 
 						return 'ok';
 					}
@@ -692,12 +703,17 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 }
 
 function showDebugData(\Delight\Auth\Auth $auth, $result) {
+	global $JWTtokenOBJ, $auth;
 	echo '<pre>';
 
 	echo 'Last operation' . "\t\t\t\t";
 	\var_dump($result);
-	echo 'Session ID' . "\t\t\t\t";
-	\var_dump(\session_id());
+	echo 'JWT token obj' . "\t\t\t\t";
+	\var_dump($JWTtokenOBJ);
+	echo 'JWT token' . "\t\t\t\t";
+	\var_dump($JWTtokenOBJ->toString());
+	echo 'JWT token (right method)' . "\t\t\t\t";
+	\var_dump($auth->generateJWTtoken());
 	echo "\n";
 
 	echo '$auth->isLoggedIn()' . "\t\t\t";
@@ -738,20 +754,10 @@ function showDebugData(\Delight\Auth\Auth $auth, $result) {
 
 	echo "\n";
 
-	echo '$auth->isRemembered()' . "\t\t\t";
-	\var_dump($auth->isRemembered());
 	echo '$auth->getIpAddress()' . "\t\t\t";
 	\var_dump($auth->getIpAddress());
 	echo "\n";
 
-	echo 'Session name' . "\t\t\t\t";
-	\var_dump(\session_name());
-	echo 'Auth::createRememberCookieName()' . "\t";
-	\var_dump(\Delight\Auth\Auth::createRememberCookieName());
-	echo "\n";
-
-	echo 'Auth::createCookieName(\'session\')' . "\t";
-	\var_dump(\Delight\Auth\Auth::createCookieName('session'));
 	echo 'Auth::createRandomString()' . "\t\t";
 	\var_dump(\Delight\Auth\Auth::createRandomString());
 	echo 'Auth::createUuid()' . "\t\t\t";

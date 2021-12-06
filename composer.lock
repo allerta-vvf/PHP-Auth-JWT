@@ -1,10 +1,10 @@
 {
     "_readme": [
         "This file locks the dependencies of your project to a known state",
-        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e4acd9e4ba13c4d0692f07a03a454859",
+    "content-hash": "6c3dbe81f2431e3c66d8a1049a50986e",
     "packages": [
         {
             "name": "delight-im/base64",
@@ -45,61 +45,24 @@
                 "encoding",
                 "url"
             ],
+            "support": {
+                "issues": "https://github.com/delight-im/PHP-Base64/issues",
+                "source": "https://github.com/delight-im/PHP-Base64/tree/master"
+            },
             "time": "2017-07-24T18:59:51+00:00"
         },
         {
-            "name": "delight-im/cookie",
-            "version": "v3.1.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/delight-im/PHP-Cookie.git",
-                "reference": "76ef2a21817cf7a034f85fc3f4d4bfc60f873947"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/delight-im/PHP-Cookie/zipball/76ef2a21817cf7a034f85fc3f4d4bfc60f873947",
-                "reference": "76ef2a21817cf7a034f85fc3f4d4bfc60f873947",
-                "shasum": ""
-            },
-            "require": {
-                "delight-im/http": "^2.0",
-                "php": ">=5.4.0"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Delight\\Cookie\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "description": "Modern cookie management for PHP",
-            "homepage": "https://github.com/delight-im/PHP-Cookie",
-            "keywords": [
-                "cookie",
-                "cookies",
-                "csrf",
-                "http",
-                "same-site",
-                "samesite",
-                "xss"
-            ],
-            "time": "2017-10-18T19:48:59+00:00"
-        },
-        {
             "name": "delight-im/db",
-            "version": "v1.3.0",
+            "version": "v1.3.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/delight-im/PHP-DB.git",
-                "reference": "7a03da20b5592fa445c10cd6c7245d51037292c4"
+                "reference": "7d6f4c7a7e8ba6a297bfc30d65702479fd0b5f7c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/delight-im/PHP-DB/zipball/7a03da20b5592fa445c10cd6c7245d51037292c4",
-                "reference": "7a03da20b5592fa445c10cd6c7245d51037292c4",
+                "url": "https://api.github.com/repos/delight-im/PHP-DB/zipball/7d6f4c7a7e8ba6a297bfc30d65702479fd0b5f7c",
+                "reference": "7d6f4c7a7e8ba6a297bfc30d65702479fd0b5f7c",
                 "shasum": ""
             },
             "require": {
@@ -127,43 +90,147 @@
                 "sql",
                 "sqlite"
             ],
-            "time": "2018-08-28T18:23:01+00:00"
+            "support": {
+                "issues": "https://github.com/delight-im/PHP-DB/issues",
+                "source": "https://github.com/delight-im/PHP-DB/tree/v1.3.1"
+            },
+            "time": "2020-02-21T10:46:03+00:00"
         },
         {
-            "name": "delight-im/http",
-            "version": "v2.0.0",
+            "name": "lcobucci/clock",
+            "version": "2.1.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/delight-im/PHP-HTTP.git",
-                "reference": "0a19a72a7eac8b1301aa972fb20cff494ac43e09"
+                "url": "https://github.com/lcobucci/clock.git",
+                "reference": "903513d28e85376a33385ebc601afd2ee69e5653"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/delight-im/PHP-HTTP/zipball/0a19a72a7eac8b1301aa972fb20cff494ac43e09",
-                "reference": "0a19a72a7eac8b1301aa972fb20cff494ac43e09",
+                "url": "https://api.github.com/repos/lcobucci/clock/zipball/903513d28e85376a33385ebc601afd2ee69e5653",
+                "reference": "903513d28e85376a33385ebc601afd2ee69e5653",
                 "shasum": ""
             },
             "require": {
-                "php": ">=5.3.0"
+                "php": "^8.0"
+            },
+            "require-dev": {
+                "infection/infection": "^0.25",
+                "lcobucci/coding-standard": "^8.0",
+                "phpstan/extension-installer": "^1.1",
+                "phpstan/phpstan": "^0.12",
+                "phpstan/phpstan-deprecation-rules": "^0.12",
+                "phpstan/phpstan-phpunit": "^0.12",
+                "phpstan/phpstan-strict-rules": "^0.12",
+                "phpunit/phpunit": "^9.5"
             },
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "Delight\\Http\\": "src/"
+                    "Lcobucci\\Clock\\": "src"
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
-            "description": "Hypertext Transfer Protocol (HTTP) utilities for PHP",
-            "homepage": "https://github.com/delight-im/PHP-HTTP",
-            "keywords": [
-                "headers",
-                "http",
-                "https"
+            "authors": [
+                {
+                    "name": "Luís Cobucci",
+                    "email": "lcobucci@gmail.com"
+                }
             ],
-            "time": "2016-07-21T15:05:01+00:00"
+            "description": "Yet another clock abstraction",
+            "support": {
+                "issues": "https://github.com/lcobucci/clock/issues",
+                "source": "https://github.com/lcobucci/clock/tree/2.1.0"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/lcobucci",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/lcobucci",
+                    "type": "patreon"
+                }
+            ],
+            "time": "2021-10-31T21:32:07+00:00"
+        },
+        {
+            "name": "lcobucci/jwt",
+            "version": "4.0.4",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/lcobucci/jwt.git",
+                "reference": "55564265fddf810504110bd68ca311932324b0e9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/lcobucci/jwt/zipball/55564265fddf810504110bd68ca311932324b0e9",
+                "reference": "55564265fddf810504110bd68ca311932324b0e9",
+                "shasum": ""
+            },
+            "require": {
+                "ext-mbstring": "*",
+                "ext-openssl": "*",
+                "lcobucci/clock": "^2.0",
+                "php": "^7.4 || ^8.0"
+            },
+            "require-dev": {
+                "infection/infection": "^0.20",
+                "lcobucci/coding-standard": "^6.0",
+                "mikey179/vfsstream": "^1.6",
+                "phpbench/phpbench": "^0.17",
+                "phpstan/extension-installer": "^1.0",
+                "phpstan/phpstan": "^0.12",
+                "phpstan/phpstan-deprecation-rules": "^0.12",
+                "phpstan/phpstan-phpunit": "^0.12",
+                "phpstan/phpstan-strict-rules": "^0.12",
+                "phpunit/php-invoker": "^3.1",
+                "phpunit/phpunit": "^9.4"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "4.0-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Lcobucci\\JWT\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Luís Cobucci",
+                    "email": "lcobucci@gmail.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A simple library to work with JSON Web Token and JSON Web Signature",
+            "keywords": [
+                "JWS",
+                "jwt"
+            ],
+            "support": {
+                "issues": "https://github.com/lcobucci/jwt/issues",
+                "source": "https://github.com/lcobucci/jwt/tree/4.0.4"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/lcobucci",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/lcobucci",
+                    "type": "patreon"
+                }
+            ],
+            "time": "2021-09-28T19:18:28+00:00"
         }
     ],
     "packages-dev": [],
@@ -176,5 +243,6 @@
         "php": ">=5.6.0",
         "ext-openssl": "*"
     },
-    "platform-dev": []
+    "platform-dev": [],
+    "plugin-api-version": "2.1.0"
 }

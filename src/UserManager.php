@@ -8,8 +8,9 @@
 
 namespace Delight\Auth;
 
+use DateTimeImmutable;
 use Delight\Base64\Base64;
-use Delight\Cookie\Session;
+use Lcobucci\JWT\Configuration;
 use Delight\Db\PdoDatabase;
 use Delight\Db\PdoDsn;
 use Delight\Db\Throwable\Error;
@@ -23,23 +24,23 @@ use Delight\Db\Throwable\IntegrityConstraintViolationException;
 abstract class UserManager {
 
 	/** @var string session field for whether the client is currently signed in */
-	const SESSION_FIELD_LOGGED_IN = 'auth_logged_in';
+	const FIELD_LOGGED_IN = 'auth_logged_in';
 	/** @var string session field for the ID of the user who is currently signed in (if any) */
-	const SESSION_FIELD_USER_ID = 'auth_user_id';
+	const FIELD_USER_ID = 'auth_user_id';
 	/** @var string session field for the email address of the user who is currently signed in (if any) */
-	const SESSION_FIELD_EMAIL = 'auth_email';
+	const FIELD_EMAIL = 'auth_email';
 	/** @var string session field for the display name (if any) of the user who is currently signed in (if any) */
-	const SESSION_FIELD_USERNAME = 'auth_username';
+	const FIELD_USERNAME = 'auth_username';
 	/** @var string session field for the status of the user who is currently signed in (if any) as one of the constants from the {@see Status} class */
-	const SESSION_FIELD_STATUS = 'auth_status';
+	const FIELD_STATUS = 'auth_status';
 	/** @var string session field for the roles of the user who is currently signed in (if any) as a bitmask using constants from the {@see Role} class */
-	const SESSION_FIELD_ROLES = 'auth_roles';
+	const FIELD_ROLES = 'auth_roles';
 	/** @var string session field for whether the user who is currently signed in (if any) has been remembered (instead of them having authenticated actively) */
-	const SESSION_FIELD_REMEMBERED = 'auth_remembered';
+	const FIELD_REMEMBERED = 'auth_remembered';
 	/** @var string session field for the UNIX timestamp in seconds of the session data's last resynchronization with its authoritative source in the database */
-	const SESSION_FIELD_LAST_RESYNC = 'auth_last_resync';
+	const FIELD_LAST_RESYNC = 'auth_last_resync';
 	/** @var string session field for the counter that keeps track of forced logouts that need to be performed in the current session */
-	const SESSION_FIELD_FORCE_LOGOUT = 'auth_force_logout';
+	const FIELD_FORCE_LOGOUT = 'auth_force_logout';
 
 	/** @var PdoDatabase the database connection to operate on */
 	protected $db;
@@ -47,6 +48,10 @@ abstract class UserManager {
 	protected $dbSchema;
 	/** @var string the prefix for the names of all database tables used by this component */
 	protected $dbTablePrefix;
+
+	protected $JWTconfig;
+
+	public $user_info = [];
 
 	/**
 	 * Creates a random string with the given maximum length
@@ -69,10 +74,11 @@ abstract class UserManager {
 
 	/**
 	 * @param PdoDatabase|PdoDsn|\PDO $databaseConnection the database connection to operate on
+	 * @param Configurator $JWTconfig the configuration for the JWT library
 	 * @param string|null $dbTablePrefix (optional) the prefix for the names of all database tables used by this component
 	 * @param string|null $dbSchema (optional) the schema name for all database tables used by this component
 	 */
-	protected function __construct($databaseConnection, $dbTablePrefix = null, $dbSchema = null) {
+	protected function __construct($databaseConnection, $JWTconfig, $dbTablePrefix = null, $dbSchema = null) {
 		if ($databaseConnection instanceof PdoDatabase) {
 			$this->db = $databaseConnection;
 		}
@@ -86,6 +92,15 @@ abstract class UserManager {
 			$this->db = null;
 
 			throw new \InvalidArgumentException('The database connection must be an instance of either `PdoDatabase`, `PdoDsn` or `PDO`');
+		}
+
+		if ($JWTconfig instanceof Configuration) {
+			$this->JWTconfig = $JWTconfig;
+		}
+		else {
+			$this->JWTconfig = null;
+
+			throw new \InvalidArgumentException('The JWT configuration must be an instance of `Lcobucci\JWT\Configuration`');
 		}
 
 		$this->dbSchema = $dbSchema !== null ? (string) $dbSchema : null;
@@ -228,19 +243,16 @@ abstract class UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout, $remembered) {
-		// re-generate the session ID to prevent session fixation attacks (requests a cookie to be written on the client)
-		Session::regenerate(true);
-
 		// save the user data in the session variables maintained by this library
-		$_SESSION[self::SESSION_FIELD_LOGGED_IN] = true;
-		$_SESSION[self::SESSION_FIELD_USER_ID] = (int) $userId;
-		$_SESSION[self::SESSION_FIELD_EMAIL] = $email;
-		$_SESSION[self::SESSION_FIELD_USERNAME] = $username;
-		$_SESSION[self::SESSION_FIELD_STATUS] = (int) $status;
-		$_SESSION[self::SESSION_FIELD_ROLES] = (int) $roles;
-		$_SESSION[self::SESSION_FIELD_FORCE_LOGOUT] = (int) $forceLogout;
-		$_SESSION[self::SESSION_FIELD_REMEMBERED] = $remembered;
-		$_SESSION[self::SESSION_FIELD_LAST_RESYNC] = \time();
+		$this->user_info[self::FIELD_LOGGED_IN] = true;
+		$this->user_info[self::FIELD_USER_ID] = (int) $userId;
+		$this->user_info[self::FIELD_EMAIL] = $email;
+		$this->user_info[self::FIELD_USERNAME] = $username;
+		$this->user_info[self::FIELD_STATUS] = (int) $status;
+		$this->user_info[self::FIELD_ROLES] = (int) $roles;
+		$this->user_info[self::FIELD_FORCE_LOGOUT] = (int) $forceLogout;
+		$this->user_info[self::FIELD_REMEMBERED] = $remembered;
+		$this->user_info[self::FIELD_LAST_RESYNC] = \time();
 	}
 
 	/**
@@ -449,6 +461,25 @@ abstract class UserManager {
 		$components = $this->makeTableNameComponents($name);
 
 		return \implode('.', $components);
+	}
+
+	public function issueToken() {
+		$now   = new DateTimeImmutable();
+		$token = $this->JWTconfig->builder()
+                // Configures the id (jti claim)
+                ->identifiedBy($this->createRandomString())
+                // Configures the time that the token was issue (iat claim)
+                ->issuedAt($now)
+                // Configures the time that the token can be used (nbf claim)
+                ->canOnlyBeUsedAfter($now->modify('+2 seconds'))
+                // Configures the expiration time of the token (exp claim)
+                ->expiresAt($now->modify('+2 hour'))
+                // Configures a new claim, called "uid"
+                ->withClaim('user_info', $this->user_info)
+                // Builds a new token
+                ->getToken($this->JWTconfig->signer(), $this->JWTconfig->signingKey());
+		
+		return $token;
 	}
 
 }
