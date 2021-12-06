@@ -8,9 +8,10 @@
 
 namespace Delight\Auth;
 
+use Exception;
 use DateTimeImmutable;
 use Delight\Base64\Base64;
-use Lcobucci\JWT\Configuration;
+use Lcobucci\JWT\{Configuration, UnencryptedToken};
 use Delight\Db\PdoDatabase;
 use Delight\Db\PdoDsn;
 use Delight\Db\Throwable\Error;
@@ -463,6 +464,7 @@ abstract class UserManager {
 		return \implode('.', $components);
 	}
 
+	//TODO: this should be a protected method
 	public function issueToken() {
 		$now   = new DateTimeImmutable();
 		$token = $this->JWTconfig->builder()
@@ -480,6 +482,20 @@ abstract class UserManager {
                 ->getToken($this->JWTconfig->signer(), $this->JWTconfig->signingKey());
 		
 		return $token;
+	}
+
+	//TODO: this should be a protected method
+	public function parseToken($token) {
+		try {
+			$parsed_token = $this->JWTconfig->parser()->parse($token);
+			if($parsed_token instanceof UnencryptedToken) {
+				return $parsed_token;
+			} else {
+				return false;
+			}
+		} catch(Exception $e) {
+			return false;
+		}
 	}
 
 }
