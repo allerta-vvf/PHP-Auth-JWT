@@ -1801,4 +1801,16 @@ final class Auth extends UserManager {
 		return parent::issueToken()->toString();
 	}
 
+	public function isTokenValid($token) {
+		return parent::validateToken(($token));
+	}
+
+	public function authenticateWithToken($token) {
+		$token = parent::parseToken($token);
+
+		if ($token) {
+			$this->user_info = $token->getClaim('user_info');
+			$this->resyncSessionIfNecessary();
+		}
+	}
 }

@@ -488,14 +488,14 @@ abstract class UserManager {
 	public function parseToken($token) {
 		try {
 			$parsed_token = $this->JWTconfig->parser()->parse($token);
-			if($parsed_token instanceof UnencryptedToken) {
-				return $parsed_token;
-			} else {
-				return false;
-			}
+			return $parsed_token;
 		} catch(Exception $e) {
 			return false;
 		}
+	}
+
+	public function validateToken($token) {
+		return $this->parseToken($token) !== false;
 	}
 
 }

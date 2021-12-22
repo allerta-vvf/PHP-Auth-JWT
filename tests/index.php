@@ -708,10 +708,12 @@ function showDebugData(\Delight\Auth\Auth $auth, $result) {
 
 	echo 'Last operation' . "\t\t\t\t";
 	\var_dump($result);
+	echo 'JWT Valid' . "\t\t\t\t";
+	\var_dump($auth->isTokenValid($auth->generateJWTtoken()));
 	echo 'JWT token obj' . "\t\t\t\t";
 	\var_dump($JWTtokenOBJ);
 	echo 'JWT token' . "\t\t\t\t";
-	\var_dump($JWTtokenOBJ->toString());
+	\var_dump(isset($JWTtokenOBJ) ? $JWTtokenOBJ->toString() : "no");
 	echo 'JWT token (right method)' . "\t\t\t\t";
 	\var_dump($auth->generateJWTtoken());
 	echo "\n";
