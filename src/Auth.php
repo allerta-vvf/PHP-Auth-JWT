@@ -326,16 +326,8 @@ final class Auth extends UserManager {
 				);
 			}
 
-			// remove all session variables maintained by this library
-			unset($this->user_info[self::FIELD_LOGGED_IN]);
-			unset($this->user_info[self::FIELD_USER_ID]);
-			unset($this->user_info[self::FIELD_EMAIL]);
-			unset($this->user_info[self::FIELD_USERNAME]);
-			unset($this->user_info[self::FIELD_STATUS]);
-			unset($this->user_info[self::FIELD_ROLES]);
-			unset($this->user_info[self::FIELD_REMEMBERED]);
-			unset($this->user_info[self::FIELD_LAST_RESYNC]);
-			unset($this->user_info[self::FIELD_FORCE_LOGOUT]);
+			$this->logged_in = false;
+			$this->user_info = [];
 		}
 	}
 
@@ -1346,7 +1338,7 @@ final class Auth extends UserManager {
 	 * @return boolean whether the user is logged in or not
 	 */
 	public function isLoggedIn() {
-		return isset($this->user_info) && isset($this->user_info[self::FIELD_LOGGED_IN]) && $this->user_info[self::FIELD_LOGGED_IN] === true;
+		return isset($this->user_info) && $this->logged_in;
 	}
 
 	/**
@@ -1805,11 +1797,12 @@ final class Auth extends UserManager {
 		return parent::validateToken(($token));
 	}
 
-	public function authenticateWithToken($token) {
-		$token = parent::parseToken($token);
+	public function authenticateWithToken($token_string) {
+		$token = parent::parseToken($token_string);
 
-		if ($token) {
-			$this->user_info = $token->getClaim('user_info');
+		if (parent::validateToken($token)) {
+			$this->user_info = $token->claims()->get('user_info');
+			$this->logged_in = true;
 			$this->resyncSessionIfNecessary();
 		}
 	}

@@ -25,8 +25,6 @@ use Delight\Db\Throwable\IntegrityConstraintViolationException;
  */
 abstract class UserManager {
 
-	/** @var string session field for whether the client is currently signed in */
-	const FIELD_LOGGED_IN = 'auth_logged_in';
 	/** @var string session field for the ID of the user who is currently signed in (if any) */
 	const FIELD_USER_ID = 'auth_user_id';
 	/** @var string session field for the email address of the user who is currently signed in (if any) */
@@ -54,6 +52,8 @@ abstract class UserManager {
 	protected $JWTconfig;
 
 	public $user_info = [];
+
+	public $logged_in = false;
 
 	/**
 	 * Creates a random string with the given maximum length
@@ -246,7 +246,7 @@ abstract class UserManager {
 	 */
 	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout, $remembered) {
 		// save the user data in the session variables maintained by this library
-		$this->user_info[self::FIELD_LOGGED_IN] = true;
+		$this->logged_in = true;
 		$this->user_info[self::FIELD_USER_ID] = (int) $userId;
 		$this->user_info[self::FIELD_EMAIL] = $email;
 		$this->user_info[self::FIELD_USERNAME] = $username;
@@ -499,7 +499,10 @@ abstract class UserManager {
 		try {
 			$this->JWTconfig->setValidationConstraints(new SignedWith($this->JWTconfig->signer(), $this->JWTconfig->verificationKey()));
 			$constraints = $this->JWTconfig->validationConstraints();
-			return $this->JWTconfig->validator()->validate($this->parseToken($token), ...$constraints);
+			if(is_string($token)) {
+				$token = $this->parseToken($token);
+			}
+			return $this->JWTconfig->validator()->validate($token, ...$constraints);
 		} catch(Exception $e) {
 			//throw new Exception($e->getMessage());
 			return false;

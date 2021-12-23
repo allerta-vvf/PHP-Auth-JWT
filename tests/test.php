@@ -65,6 +65,17 @@ d($issuedToken->payload());
 d($JWTconfig->signingKey());
 d($JWTconfig->signer()->verify($issuedToken->signature()->hash(), $issuedToken->payload(), LocalFileReference::file(__DIR__ . '/public.key')));
 d($auth->validateToken($issuedTokenString));
+echo("---<br>");
+d($auth->getUserId());
+d($auth->isLoggedIn());
+echo("logout");
+$auth->logOut();
+d($auth->getUserId());
+d($auth->isLoggedIn());
+echo("auth with token");
+$auth->authenticateWithToken($issuedTokenString);
+d($auth->getUserId());
+d($auth->isLoggedIn());
 
 function varName( $v ) {
     //bad function here, using it only for testing
