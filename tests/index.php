@@ -62,22 +62,13 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 	if (isset($_POST)) {
 		if (isset($_POST['action'])) {
 			if ($_POST['action'] === 'login') {
-				if ($_POST['remember'] == 1) {
-					// keep logged in for one year
-					$rememberDuration = (int) (60 * 60 * 24 * 365.25);
-				}
-				else {
-					// do not keep logged in after session ends
-					$rememberDuration = null;
-				}
-
 				try {
 					if (isset($_POST['email'])) {
-						$auth->login($_POST['email'], $_POST['password'], $rememberDuration);
+						$auth->login($_POST['email'], $_POST['password']);
 						$JWTtokenOBJ = $auth->issueToken();
 					}
 					elseif (isset($_POST['username'])) {
-						$auth->loginWithUsername($_POST['username'], $_POST['password'], $rememberDuration);
+						$auth->loginWithUsername($_POST['username'], $_POST['password']);
 						$JWTtokenOBJ = $auth->issueToken();
 					}
 					else {
@@ -156,16 +147,7 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 			else if ($_POST['action'] === 'confirmEmail') {
 				try {
 					if (isset($_POST['login']) && $_POST['login'] > 0) {
-						if ($_POST['login'] == 2) {
-							// keep logged in for one year
-							$rememberDuration = (int) (60 * 60 * 24 * 365.25);
-						}
-						else {
-							// do not keep logged in after session ends
-							$rememberDuration = null;
-						}
-
-						return $auth->confirmEmailAndSignIn($_POST['selector'], $_POST['token'], $rememberDuration);
+						return $auth->confirmEmailAndSignIn($_POST['selector'], $_POST['token']);
 					}
 					else {
 						return $auth->confirmEmail($_POST['selector'], $_POST['token']);
@@ -268,16 +250,7 @@ function processRequestData(\Delight\Auth\Auth $auth) {
 			else if ($_POST['action'] === 'resetPassword') {
 				try {
 					if (isset($_POST['login']) && $_POST['login'] > 0) {
-						if ($_POST['login'] == 2) {
-							// keep logged in for one year
-							$rememberDuration = (int) (60 * 60 * 24 * 365.25);
-						}
-						else {
-							// do not keep logged in after session ends
-							$rememberDuration = null;
-						}
-
-						return $auth->resetPasswordAndSignIn($_POST['selector'], $_POST['token'], $_POST['password'], $rememberDuration);
+						return $auth->resetPasswordAndSignIn($_POST['selector'], $_POST['token'], $_POST['password']);
 					}
 					else {
 						return $auth->resetPassword($_POST['selector'], $_POST['token'], $_POST['password']);
@@ -871,10 +844,6 @@ function showGuestUserForm() {
 	echo '<input type="hidden" name="action" value="login" />';
 	echo '<input type="text" name="email" placeholder="Email address" /> ';
 	echo '<input type="text" name="password" placeholder="Password" /> ';
-	echo '<select name="remember" size="1">';
-	echo '<option value="0">Remember (keep logged in)? — No</option>';
-	echo '<option value="1">Remember (keep logged in)? — Yes</option>';
-	echo '</select> ';
 	echo '<button type="submit">Log in with email address</button>';
 	echo '</form>';
 
@@ -882,10 +851,6 @@ function showGuestUserForm() {
 	echo '<input type="hidden" name="action" value="login" />';
 	echo '<input type="text" name="username" placeholder="Username" /> ';
 	echo '<input type="text" name="password" placeholder="Password" /> ';
-	echo '<select name="remember" size="1">';
-	echo '<option value="0">Remember (keep logged in)? — No</option>';
-	echo '<option value="1">Remember (keep logged in)? — Yes</option>';
-	echo '</select> ';
 	echo '<button type="submit">Log in with username</button>';
 	echo '</form>';
 
@@ -921,7 +886,6 @@ function showGuestUserForm() {
 	echo '<select name="login" size="1">';
 	echo '<option value="0">Sign in automatically? — No</option>';
 	echo '<option value="1">Sign in automatically? — Yes</option>';
-	echo '<option value="2">Sign in automatically? — Yes (and remember)</option>';
 	echo '</select> ';
 	echo '<button type="submit">Reset password</button>';
 	echo '</form>';
@@ -1063,7 +1027,6 @@ function showConfirmEmailForm() {
 	echo '<select name="login" size="1">';
 	echo '<option value="0">Sign in automatically? — No</option>';
 	echo '<option value="1">Sign in automatically? — Yes</option>';
-	echo '<option value="2">Sign in automatically? — Yes (and remember)</option>';
 	echo '</select> ';
 	echo '<button type="submit">Confirm email</button>';
 	echo '</form>';

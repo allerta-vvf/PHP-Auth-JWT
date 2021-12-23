@@ -35,8 +35,6 @@ abstract class UserManager {
 	const FIELD_STATUS = 'auth_status';
 	/** @var string session field for the roles of the user who is currently signed in (if any) as a bitmask using constants from the {@see Role} class */
 	const FIELD_ROLES = 'auth_roles';
-	/** @var string session field for whether the user who is currently signed in (if any) has been remembered (instead of them having authenticated actively) */
-	const FIELD_REMEMBERED = 'auth_remembered';
 	/** @var string session field for the UNIX timestamp in seconds of the session data's last resynchronization with its authoritative source in the database */
 	const FIELD_LAST_RESYNC = 'auth_last_resync';
 	/** @var string session field for the counter that keeps track of forced logouts that need to be performed in the current session */
@@ -233,7 +231,7 @@ abstract class UserManager {
 	/**
 	 * Called when a user has successfully logged in
 	 *
-	 * This may happen via the standard login, via the "remember me" feature, or due to impersonation by administrators
+	 * This may happen via the standard login, or due to impersonation by administrators
 	 *
 	 * @param int $userId the ID of the user
 	 * @param string $email the email address of the user
@@ -241,10 +239,9 @@ abstract class UserManager {
 	 * @param int $status the status of the user as one of the constants from the {@see Status} class
 	 * @param int $roles the roles of the user as a bitmask using constants from the {@see Role} class
 	 * @param int $forceLogout the counter that keeps track of forced logouts that need to be performed in the current session
-	 * @param bool $remembered whether the user has been remembered (instead of them having authenticated actively)
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout, $remembered) {
+	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout) {
 		// save the user data in the session variables maintained by this library
 		$this->logged_in = true;
 		$this->user_info[self::FIELD_USER_ID] = (int) $userId;
@@ -253,7 +250,6 @@ abstract class UserManager {
 		$this->user_info[self::FIELD_STATUS] = (int) $status;
 		$this->user_info[self::FIELD_ROLES] = (int) $roles;
 		$this->user_info[self::FIELD_FORCE_LOGOUT] = (int) $forceLogout;
-		$this->user_info[self::FIELD_REMEMBERED] = $remembered;
 		$this->user_info[self::FIELD_LAST_RESYNC] = \time();
 	}
 
@@ -384,40 +380,12 @@ abstract class UserManager {
 	}
 
 	/**
-	 * Clears an existing directive that keeps the user logged in ("remember me")
-	 *
-	 * @param int $userId the ID of the user who shouldn't be kept signed in anymore
-	 * @param string $selector (optional) the selector which the deletion should be restricted to
-	 * @throws AuthError if an internal problem occurred (do *not* catch)
-	 */
-	protected function deleteRememberDirectiveForUserById($userId, $selector = null) {
-		$whereMappings = [];
-
-		if (isset($selector)) {
-			$whereMappings['selector'] = (string) $selector;
-		}
-
-		$whereMappings['user'] = (int) $userId;
-
-		try {
-			$this->db->delete(
-				$this->makeTableNameComponents('users_remembered'),
-				$whereMappings
-			);
-		}
-		catch (Error $e) {
-			throw new DatabaseError($e->getMessage());
-		}
-	}
-
-	/**
 	 * Triggers a forced logout in all sessions that belong to the specified user
 	 *
 	 * @param int $userId the ID of the user to sign out
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	protected function forceLogoutForUserById($userId) {
-		$this->deleteRememberDirectiveForUserById($userId);
 		$this->db->exec(
 			'UPDATE ' . $this->makeTableName('users') . ' SET force_logout = force_logout + 1 WHERE id = ?',
 			[ $userId ]

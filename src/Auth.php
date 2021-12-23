@@ -23,8 +23,6 @@ final class Auth extends UserManager {
 	private $throttling;
 	/** @var int the interval in seconds after which to resynchronize the session data with its authoritative source in the database */
 	private $sessionResyncInterval;
-	/** @var string the name of the cookie used for the 'remember me' feature */
-	private $rememberCookieName = "";
 
 	/**
 	 * @param PdoDatabase|PdoDsn|\PDO $databaseConnection the database connection to operate on
@@ -47,10 +45,6 @@ final class Auth extends UserManager {
 		$this->resyncSessionIfNecessary();
 	}
 
-	/** Not yet necessary. */
-	private function initSessionIfNecessary() {
-	}
-
 	/** Improves the application's security over HTTP(S) by setting specific headers */
 	private function enhanceHttpSecurity() {
 		// remove exposure of PHP version (at least where possible)
@@ -68,10 +62,6 @@ final class Auth extends UserManager {
 			\header('Expires: Thu, 19 Nov 1981 00:00:00 GMT', true);
 			\header('Pragma: no-cache', true);
 		}
-	}
-
-	/** Not yet necessary. */
-	private function processRememberDirective() {
 	}
 
 	private function resyncSessionIfNecessary() {
@@ -214,7 +204,6 @@ final class Auth extends UserManager {
 	 *
 	 * @param string $email the user's email address
 	 * @param string $password the user's password
-	 * @param int|null $rememberDuration (optional) the duration in seconds to keep the user logged in ("remember me"), e.g. `60 * 60 * 24 * 365.25` for one year
 	 * @param callable|null $onBeforeSuccess (optional) a function that receives the user's ID as its single parameter and is executed before successful authentication; must return `true` to proceed or `false` to cancel
 	 * @throws InvalidEmailException if the email address was invalid or could not be found
 	 * @throws InvalidPasswordException if the password was invalid
@@ -223,10 +212,10 @@ final class Auth extends UserManager {
 	 * @throws TooManyRequestsException if the number of allowed attempts/requests has been exceeded
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	public function login($email, $password, $rememberDuration = null, callable $onBeforeSuccess = null) {
+	public function login($email, $password, callable $onBeforeSuccess = null) {
 		$this->throttle([ 'attemptToLogin', 'email', $email ], 500, (60 * 60 * 24), null, true);
 
-		$this->authenticateUserInternal($password, $email, null, $rememberDuration, $onBeforeSuccess);
+		$this->authenticateUserInternal($password, $email, null, $onBeforeSuccess);
 	}
 
 	/**
@@ -238,7 +227,6 @@ final class Auth extends UserManager {
 	 *
 	 * @param string $username the user's username
 	 * @param string $password the user's password
-	 * @param int|null $rememberDuration (optional) the duration in seconds to keep the user logged in ("remember me"), e.g. `60 * 60 * 24 * 365.25` for one year
 	 * @param callable|null $onBeforeSuccess (optional) a function that receives the user's ID as its single parameter and is executed before successful authentication; must return `true` to proceed or `false` to cancel
 	 * @throws UnknownUsernameException if the specified username does not exist
 	 * @throws AmbiguousUsernameException if the specified username is ambiguous, i.e. there are multiple users with that name
@@ -248,10 +236,10 @@ final class Auth extends UserManager {
 	 * @throws TooManyRequestsException if the number of allowed attempts/requests has been exceeded
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	public function loginWithUsername($username, $password, $rememberDuration = null, callable $onBeforeSuccess = null) {
+	public function loginWithUsername($username, $password, callable $onBeforeSuccess = null) {
 		$this->throttle([ 'attemptToLogin', 'username', $username ], 500, (60 * 60 * 24), null, true);
 
-		$this->authenticateUserInternal($password, null, $username, $rememberDuration, $onBeforeSuccess);
+		$this->authenticateUserInternal($password, null, $username, $onBeforeSuccess);
 	}
 
 	/**
@@ -314,18 +302,6 @@ final class Auth extends UserManager {
 	public function logOut() {
 		// if the user has been signed in
 		if ($this->isLoggedIn()) {
-			// retrieve any locally existing remember directive
-			$rememberDirectiveSelector = $this->getRememberDirectiveSelector();
-
-			// if such a remember directive exists
-			if (isset($rememberDirectiveSelector)) {
-				// delete the local remember directive
-				$this->deleteRememberDirectiveForUserById(
-					$this->getUserId(),
-					$rememberDirectiveSelector
-				);
-			}
-
 			$this->logged_in = false;
 			$this->user_info = [];
 		}
@@ -342,9 +318,6 @@ final class Auth extends UserManager {
 			throw new NotLoggedInException();
 		}
 
-		// determine the expiry date of any locally existing remember directive
-		$previousRememberDirectiveExpiry = $this->getRememberDirectiveExpiry();
-
 		// schedule a forced logout in all sessions
 		$this->forceLogoutForUserById($this->getUserId());
 
@@ -355,15 +328,6 @@ final class Auth extends UserManager {
 
 		// ensure that we will simply skip or ignore the next forced logout (which we have just caused) in the current session
 		$this->user_info[self::FIELD_FORCE_LOGOUT]++;
-
-		// if there had been an existing remember directive previously
-		if (isset($previousRememberDirectiveExpiry)) {
-			// restore the directive with the old expiry date but new credentials
-			$this->createRememberDirective(
-				$this->getUserId(),
-				$previousRememberDirectiveExpiry - \time()
-			);
-		}
 	}
 
 	/**
@@ -390,54 +354,11 @@ final class Auth extends UserManager {
 	 */
 	public function destroySession() {
 		// remove all session variables without exception
+		$this->logged_in = false;
 		$this->user_info = [];
 	}
 
-	/**
-	 * Creates a new directive keeping the user logged in ("remember me")
-	 *
-	 * @param int $userId the user ID to keep signed in
-	 * @param int $duration the duration in seconds
-	 * @throws AuthError if an internal problem occurred (do *not* catch)
-	 */
-	private function createRememberDirective($userId, $duration) {
-		$selector = self::createRandomString(24);
-		$token = self::createRandomString(32);
-		$tokenHashed = \password_hash($token, \PASSWORD_DEFAULT);
-		$expires = \time() + ((int) $duration);
-
-		try {
-			$this->db->insert(
-				$this->makeTableNameComponents('users_remembered'),
-				[
-					'user' => $userId,
-					'selector' => $selector,
-					'token' => $tokenHashed,
-					'expires' => $expires
-				]
-			);
-		}
-		catch (Error $e) {
-			throw new DatabaseError($e->getMessage());
-		}
-	}
-
-	protected function deleteRememberDirectiveForUserById($userId, $selector = null) {
-		parent::deleteRememberDirectiveForUserById($userId, $selector);
-	}
-
-	/**
-	 * Not yet necessary.
-	 *
-	 * @param string|null $selector the selector from the selector/token pair
-	 * @param string|null $token the token from the selector/token pair
-	 * @param int $expires the UNIX time in seconds which the token should expire at
-	 * @throws AuthError if an internal problem occurred (do *not* catch)
-	 */
-	private function setRememberCookie($selector, $token, $expires) {
-	}
-
-	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout, $remembered) {
+	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout) {
 		// update the timestamp of the user's last login
 		try {
 			$this->db->update(
@@ -450,15 +371,7 @@ final class Auth extends UserManager {
 			throw new DatabaseError($e->getMessage());
 		}
 
-		parent::onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout, $remembered);
-	}
-
-	/**
-	 * Not yet necessary.
-	 *
-	 * @throws AuthError if an internal problem occurred (do *not* catch)
-	 */
-	private function deleteSessionCookie() {
+		parent::onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout);
 	}
 
 	/**
@@ -575,7 +488,6 @@ final class Auth extends UserManager {
 	 *
 	 * @param string $selector the selector from the selector/token pair
 	 * @param string $token the token from the selector/token pair
-	 * @param int|null $rememberDuration (optional) the duration in seconds to keep the user logged in ("remember me"), e.g. `60 * 60 * 24 * 365.25` for one year
 	 * @return string[] an array with the old email address (if any) at index zero and the new email address (which has just been verified) at index one
 	 * @throws InvalidSelectorTokenPairException if either the selector or the token was not correct
 	 * @throws TokenExpiredException if the token has already expired
@@ -583,7 +495,7 @@ final class Auth extends UserManager {
 	 * @throws TooManyRequestsException if the number of allowed attempts/requests has been exceeded
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	public function confirmEmailAndSignIn($selector, $token, $rememberDuration = null) {
+	public function confirmEmailAndSignIn($selector, $token) {
 		$emailBeforeAndAfter = $this->confirmEmail($selector, $token);
 
 		if (!$this->isLoggedIn()) {
@@ -595,11 +507,7 @@ final class Auth extends UserManager {
 					[ 'id', 'email', 'username', 'status', 'roles_mask', 'force_logout' ]
 				);
 
-				$this->onLoginSuccessful($userData['id'], $userData['email'], $userData['username'], $userData['status'], $userData['roles_mask'], $userData['force_logout'], true);
-
-				if ($rememberDuration !== null) {
-					$this->createRememberDirective($userData['id'], $rememberDuration);
-				}
+				$this->onLoginSuccessful($userData['id'], $userData['email'], $userData['username'], $userData['status'], $userData['roles_mask'], $userData['force_logout']);
 			}
 		}
 
@@ -884,7 +792,6 @@ final class Auth extends UserManager {
 	 * @param string $password the user's password
 	 * @param string|null $email (optional) the user's email address
 	 * @param string|null $username (optional) the user's username
-	 * @param int|null $rememberDuration (optional) the duration in seconds to keep the user logged in ("remember me"), e.g. `60 * 60 * 24 * 365.25` for one year
 	 * @param callable|null $onBeforeSuccess (optional) a function that receives the user's ID as its single parameter and is executed before successful authentication; must return `true` to proceed or `false` to cancel
 	 * @throws InvalidEmailException if the email address was invalid or could not be found
 	 * @throws UnknownUsernameException if an attempt has been made to authenticate with a non-existing username
@@ -895,7 +802,7 @@ final class Auth extends UserManager {
 	 * @throws TooManyRequestsException if the number of allowed attempts/requests has been exceeded
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	private function authenticateUserInternal($password, $email = null, $username = null, $rememberDuration = null, callable $onBeforeSuccess = null) {
+	private function authenticateUserInternal($password, $email = null, $username = null, callable $onBeforeSuccess = null) {
 		$this->throttle([ 'enumerateUsers', $this->getIpAddress() ], 1, (60 * 60), 75);
 		$this->throttle([ 'attemptToLogin', $this->getIpAddress() ], 4, (60 * 60), 5, true);
 
@@ -936,19 +843,7 @@ final class Auth extends UserManager {
 
 			if ((int) $userData['verified'] === 1) {
 				if (!isset($onBeforeSuccess) || (\is_callable($onBeforeSuccess) && $onBeforeSuccess($userData['id']) === true)) {
-					$this->onLoginSuccessful($userData['id'], $userData['email'], $userData['username'], $userData['status'], $userData['roles_mask'], $userData['force_logout'], false);
-
-					// continue to support the old parameter format
-					if ($rememberDuration === true) {
-						$rememberDuration = 60 * 60 * 24 * 28;
-					}
-					elseif ($rememberDuration === false) {
-						$rememberDuration = null;
-					}
-
-					if ($rememberDuration !== null) {
-						$this->createRememberDirective($userData['id'], $rememberDuration);
-					}
+					$this->onLoginSuccessful($userData['id'], $userData['email'], $userData['username'], $userData['status'], $userData['roles_mask'], $userData['force_logout']);
 
 					return;
 				}
@@ -1175,7 +1070,6 @@ final class Auth extends UserManager {
 	 * @param string $selector the selector from the selector/token pair
 	 * @param string $token the token from the selector/token pair
 	 * @param string $newPassword the new password to set for the account
-	 * @param int|null $rememberDuration (optional) the duration in seconds to keep the user logged in ("remember me"), e.g. `60 * 60 * 24 * 365.25` for one year
 	 * @return string[] an array with the user's ID at index `id` and the user's email address at index `email`
 	 * @throws InvalidSelectorTokenPairException if either the selector or the token was not correct
 	 * @throws TokenExpiredException if the token has already expired
@@ -1189,7 +1083,7 @@ final class Auth extends UserManager {
 	 * @see canResetPassword
 	 * @see resetPassword
 	 */
-	public function resetPasswordAndSignIn($selector, $token, $newPassword, $rememberDuration = null) {
+	public function resetPasswordAndSignIn($selector, $token, $newPassword) {
 		$idAndEmail = $this->resetPassword($selector, $token, $newPassword);
 
 		if (!$this->isLoggedIn()) {
@@ -1200,11 +1094,7 @@ final class Auth extends UserManager {
 				[ 'username', 'status', 'roles_mask', 'force_logout' ]
 			);
 
-			$this->onLoginSuccessful($idAndEmail['id'], $idAndEmail['email'], $userData['username'], $userData['status'], $userData['roles_mask'], $userData['force_logout'], true);
-
-			if ($rememberDuration !== null) {
-				$this->createRememberDirective($idAndEmail['id'], $rememberDuration);
-			}
+			$this->onLoginSuccessful($idAndEmail['id'], $idAndEmail['email'], $userData['username'], $userData['status'], $userData['roles_mask'], $userData['force_logout']);
 		}
 
 		return $idAndEmail;
@@ -1560,15 +1450,6 @@ final class Auth extends UserManager {
 	}
 
 	/**
-	 * Not yet necessary.
-	 *
-	 * @return bool whether they have been remembered
-	 */
-	public function isRemembered() {
-		return false;
-	}
-
-	/**
 	 * Returns the user's current IP address
 	 *
 	 * @return string the IP address (IPv4 or IPv6)
@@ -1724,69 +1605,6 @@ final class Auth extends UserManager {
 		$data[8] = \chr(\ord($data[8]) & 0x3f | 0x80);
 
 		return \vsprintf('%s%s-%s-%s-%s-%s%s%s', \str_split(\bin2hex($data), 4));
-	}
-
-	/**
-	 * Not yet necessary.
-	 *
-	 * @param string $descriptor a short label describing the purpose of the cookie, e.g. 'session'
-	 * @param string|null $seed (optional) the data to deterministically generate the name from
-	 * @return string
-	 */
-	public static function createCookieName($descriptor, $seed = null) {
-		return "";
-	}
-
-	/**
-	 * Not yet necessary.
-	 *
-	 * @param string|null $sessionName (optional) the session name that the output should be based on
-	 * @return string
-	 */
-	public static function createRememberCookieName($sessionName = null) {
-		return "";
-	}
-
-	/**
-	 * Not yet necessary.
-	 *
-	 * @return string|null
-	 */
-	private function getRememberDirectiveSelector() {
-		return null;
-	}
-
-	/**
-	 * Returns the expiry date of a potential locally existing remember directive
-	 *
-	 * @return int|null
-	 */
-	private function getRememberDirectiveExpiry() {
-		// if the user is currently signed in
-		if ($this->isLoggedIn()) {
-			// determine the selector of any currently existing remember directive
-			$existingSelector = $this->getRememberDirectiveSelector();
-
-			// if there is currently a remember directive whose selector we have just retrieved
-			if (isset($existingSelector)) {
-				// fetch the expiry date for the given selector
-				$existingExpiry = $this->db->selectValue(
-					'SELECT expires FROM ' . $this->makeTableName('users_remembered') . ' WHERE selector = ? AND user = ?',
-					[
-						$existingSelector,
-						$this->getUserId()
-					]
-				);
-
-				// if an expiration date has been found
-				if (isset($existingExpiry)) {
-					// return the date
-					return (int) $existingExpiry;
-				}
-			}
-		}
-
-		return null;
 	}
 
 	public function generateJWTtoken() {
