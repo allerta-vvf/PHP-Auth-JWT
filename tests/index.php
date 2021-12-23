@@ -33,9 +33,14 @@ $db = new \PDO('mysql:dbname=php_auth;host=127.0.0.1;charset=utf8mb4', 'root', '
 // or
 // $db = new \PDO('sqlite:../Databases/php_auth.sqlite');
 
-$JWTconfig = Lcobucci\JWT\Configuration::forUnsecuredSigner(
+$JWTconfig = Configuration::forAsymmetricSigner(
+    // You may use any HMAC variations (256, 384, and 512)
+    new Signer\Rsa\Sha256(),
+    // replace the value below with a key of your own!
+    LocalFileReference::file(__DIR__ . '/private.key'),
+    LocalFileReference::file(__DIR__ . '/public.key')
     // You may also override the JOSE encoder/decoder if needed by providing extra arguments here
-); //TODO: replace this with test configuration
+);
 $JWTtokenOBJ = null;
 
 $auth = new \Delight\Auth\Auth($db, $JWTconfig);

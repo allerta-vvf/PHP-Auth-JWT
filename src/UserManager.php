@@ -496,9 +496,14 @@ abstract class UserManager {
 	}
 
 	public function validateToken($token) {
-		$this->JWTconfig->setValidationConstraints(new SignedWith($this->JWTconfig->signer(), $this->JWTconfig->signingKey()));
-		$constraints = $this->JWTconfig->validationConstraints();
-		return $this->JWTconfig->validator()->validate($this->parseToken($token), ...$constraints);
+		try {
+			$this->JWTconfig->setValidationConstraints(new SignedWith($this->JWTconfig->signer(), $this->JWTconfig->verificationKey()));
+			$constraints = $this->JWTconfig->validationConstraints();
+			return $this->JWTconfig->validator()->validate($this->parseToken($token), ...$constraints);
+		} catch(Exception $e) {
+			//throw new Exception($e->getMessage());
+			return false;
+		}
 	}
 
 }
