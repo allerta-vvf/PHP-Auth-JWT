@@ -12,6 +12,7 @@ use Exception;
 use DateTimeImmutable;
 use Delight\Base64\Base64;
 use Lcobucci\JWT\{Configuration, UnencryptedToken};
+use Lcobucci\JWT\Validation\Constraint\SignedWith;
 use Delight\Db\PdoDatabase;
 use Delight\Db\PdoDsn;
 use Delight\Db\Throwable\Error;
@@ -495,7 +496,9 @@ abstract class UserManager {
 	}
 
 	public function validateToken($token) {
-		return $this->parseToken($token) !== false;
+		$this->JWTconfig->setValidationConstraints(new SignedWith($this->JWTconfig->signer(), $this->JWTconfig->signingKey()));
+		$constraints = $this->JWTconfig->validationConstraints();
+		return $this->JWTconfig->validator()->validate($this->parseToken($token), ...$constraints);
 	}
 
 }
