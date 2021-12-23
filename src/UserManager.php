@@ -470,6 +470,9 @@ abstract class UserManager {
 			if(is_string($token)) {
 				$token = $this->parseToken($token);
 			}
+			if(!$token) {
+				return false;
+			}
 			return $this->JWTconfig->validator()->validate($token, ...$constraints);
 		} catch(Exception $e) {
 			//throw new Exception($e->getMessage());
