@@ -433,8 +433,7 @@ abstract class UserManager {
 		return \implode('.', $components);
 	}
 
-	//TODO: this should be a protected method
-	public function issueToken() {
+	protected function issueToken() {
 		$now   = new DateTimeImmutable();
 		$token = $this->JWTconfig->builder()
                 // Configures the id (jti claim)
@@ -442,9 +441,9 @@ abstract class UserManager {
                 // Configures the time that the token was issue (iat claim)
                 ->issuedAt($now)
                 // Configures the time that the token can be used (nbf claim)
-                ->canOnlyBeUsedAfter($now->modify('+2 seconds'))
+                //->canOnlyBeUsedAfter($now->modify('+2 seconds'))
                 // Configures the expiration time of the token (exp claim)
-                ->expiresAt($now->modify('+2 hour'))
+                ->expiresAt($now->modify('+2 weeks'))
                 // Configures a new claim, called "uid"
                 ->withClaim('user_info', $this->user_info)
                 // Builds a new token
@@ -453,7 +452,6 @@ abstract class UserManager {
 		return $token;
 	}
 
-	//TODO: this should be a protected method
 	public function parseToken($token) {
 		try {
 			$parsed_token = $this->JWTconfig->parser()->parse($token);
