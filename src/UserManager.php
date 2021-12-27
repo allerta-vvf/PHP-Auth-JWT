@@ -433,7 +433,7 @@ abstract class UserManager {
 		return \implode('.', $components);
 	}
 
-	protected function issueToken() {
+	protected function issueToken($extra_data=[]) {
 		$now   = new DateTimeImmutable();
 		$token = $this->JWTconfig->builder()
                 // Configures the id (jti claim)
@@ -445,7 +445,7 @@ abstract class UserManager {
                 // Configures the expiration time of the token (exp claim)
                 ->expiresAt($now->modify('+2 weeks'))
                 // Configures a new claim, called "uid"
-                ->withClaim('user_info', $this->user_info)
+                ->withClaim('user_info', array_merge($this->user_info, $extra_data))
                 // Builds a new token
                 ->getToken($this->JWTconfig->signer(), $this->JWTconfig->signingKey());
 		

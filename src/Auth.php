@@ -1607,8 +1607,8 @@ final class Auth extends UserManager {
 		return \vsprintf('%s%s-%s-%s-%s-%s%s%s', \str_split(\bin2hex($data), 4));
 	}
 
-	public function generateJWTtoken() {
-		return parent::issueToken()->toString();
+	public function generateJWTtoken($extra_data=[]) {
+		return parent::issueToken($extra_data)->toString();
 	}
 
 	public function isTokenValid($token) {
