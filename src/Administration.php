@@ -20,8 +20,8 @@ final class Administration extends UserManager {
 	 * @param string|null $dbTablePrefix (optional) the prefix for the names of all database tables used by this component
 	 * @param string|null $dbSchema (optional) the schema name for all database tables used by this component
 	 */
-	public function __construct($databaseConnection, $dbTablePrefix = null, $dbSchema = null) {
-		parent::__construct($databaseConnection, $dbTablePrefix, $dbSchema);
+	public function __construct($databaseConnection, $JWTconfig, $dbTablePrefix = null, $dbSchema = null) {
+		parent::__construct($databaseConnection, $JWTconfig, $dbTablePrefix, $dbSchema);
 	}
 
 	/**

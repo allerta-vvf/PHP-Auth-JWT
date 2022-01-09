@@ -1585,7 +1585,7 @@ final class Auth extends UserManager {
 	 * @return Administration
 	 */
 	public function admin() {
-		return new Administration($this->db, $this->dbTablePrefix, $this->dbSchema);
+		return new Administration($this->db, $this->JWTconfig, $this->dbTablePrefix, $this->dbSchema);
 	}
 
 	/**
