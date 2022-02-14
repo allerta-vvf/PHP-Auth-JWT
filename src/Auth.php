@@ -358,7 +358,7 @@ final class Auth extends UserManager {
 		$this->user_info = [];
 	}
 
-	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout) {
+	public function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout) {
 		// update the timestamp of the user's last login
 		try {
 			$this->db->update(
@@ -1585,7 +1585,7 @@ final class Auth extends UserManager {
 	 * @return Administration
 	 */
 	public function admin() {
-		return new Administration($this->db, $this->JWTconfig, $this->dbTablePrefix, $this->dbSchema);
+		return new Administration($this);
 	}
 
 	/**

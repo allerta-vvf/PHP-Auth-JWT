@@ -15,13 +15,13 @@ use Delight\Db\Throwable\Error;
 /** Component that can be used for administrative tasks by privileged and authorized users */
 final class Administration extends UserManager {
 
+	public $parent = null;
+
 	/**
-	 * @param PdoDatabase|PdoDsn|\PDO $databaseConnection the database connection to operate on
-	 * @param string|null $dbTablePrefix (optional) the prefix for the names of all database tables used by this component
-	 * @param string|null $dbSchema (optional) the schema name for all database tables used by this component
+	 * @param Auth $parent the parent Auth class
 	 */
-	public function __construct($databaseConnection, $JWTconfig, $dbTablePrefix = null, $dbSchema = null) {
-		parent::__construct($databaseConnection, $JWTconfig, $dbTablePrefix, $dbSchema);
+	public function __construct($parent = null) {
+		$this->parent = $parent;
 	}
 
 	/**
@@ -37,7 +37,7 @@ final class Administration extends UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	public function createUser($email, $password, $username = null) {
-		return $this->createUserInternal(false, $email, $password, $username, null);
+		return $this->parent->createUserInternal(false, $email, $password, $username, null);
 	}
 
 	/**
@@ -54,7 +54,7 @@ final class Administration extends UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	public function createUserWithUniqueUsername($email, $password, $username = null) {
-		return $this->createUserInternal(true, $email, $password, $username, null);
+		return $this->parent->createUserInternal(true, $email, $password, $username, null);
 	}
 
 	/**
@@ -84,7 +84,7 @@ final class Administration extends UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	public function deleteUserByEmail($email) {
-		$email = self::validateEmailAddress($email);
+		$email = $this->parent->validateEmailAddress($email);
 
 		$numberOfDeletedUsers = $this->deleteUsersByColumnValue('email', $email);
 
@@ -104,7 +104,7 @@ final class Administration extends UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	public function deleteUserByUsername($username) {
-		$userData = $this->getUserDataByUsername(
+		$userData = $this->parent->getUserDataByUsername(
 			\trim($username),
 			[ 'id' ]
 		);
@@ -147,7 +147,7 @@ final class Administration extends UserManager {
 	 * @see Role
 	 */
 	public function addRoleForUserByEmail($userEmail, $role) {
-		$userEmail = self::validateEmailAddress($userEmail);
+		$userEmail = $this->parent->validateEmailAddress($userEmail);
 
 		$userFound = $this->addRoleForUserByColumnValue(
 			'email',
@@ -173,7 +173,7 @@ final class Administration extends UserManager {
 	 * @see Role
 	 */
 	public function addRoleForUserByUsername($username, $role) {
-		$userData = $this->getUserDataByUsername(
+		$userData = $this->parent->getUserDataByUsername(
 			\trim($username),
 			[ 'id' ]
 		);
@@ -220,7 +220,7 @@ final class Administration extends UserManager {
 	 * @see Role
 	 */
 	public function removeRoleForUserByEmail($userEmail, $role) {
-		$userEmail = self::validateEmailAddress($userEmail);
+		$userEmail = $this->parent->validateEmailAddress($userEmail);
 
 		$userFound = $this->removeRoleForUserByColumnValue(
 			'email',
@@ -246,7 +246,7 @@ final class Administration extends UserManager {
 	 * @see Role
 	 */
 	public function removeRoleForUserByUsername($username, $role) {
-		$userData = $this->getUserDataByUsername(
+		$userData = $this->parent->getUserDataByUsername(
 			\trim($username),
 			[ 'id' ]
 		);
@@ -275,8 +275,8 @@ final class Administration extends UserManager {
 
 		$userId = (int) $userId;
 
-		$rolesBitmask = $this->db->selectValue(
-			'SELECT roles_mask FROM ' . $this->makeTableName('users') . ' WHERE id = ?',
+		$rolesBitmask = $this->parent->db->selectValue(
+			'SELECT roles_mask FROM ' . $this->parent->makeTableName('users') . ' WHERE id = ?',
 			[ $userId ]
 		);
 
@@ -301,8 +301,8 @@ final class Administration extends UserManager {
 	public function getRolesForUserById($userId) {
 		$userId = (int) $userId;
 
-		$rolesBitmask = $this->db->selectValue(
-			'SELECT roles_mask FROM ' . $this->makeTableName('users') . ' WHERE id = ?',
+		$rolesBitmask = $this->parent->db->selectValue(
+			'SELECT roles_mask FROM ' . $this->parent->makeTableName('users') . ' WHERE id = ?',
 			[ $userId ]
 		);
 
@@ -344,7 +344,7 @@ final class Administration extends UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	public function logInAsUserByEmail($email) {
-		$email = self::validateEmailAddress($email);
+		$email = $this->parent->validateEmailAddress($email);
 
 		$numberOfMatchedUsers = $this->logInAsUserByColumnValue('email', $email);
 
@@ -386,12 +386,12 @@ final class Administration extends UserManager {
 		$userId = (int) $userId;
 		$newPassword = self::validatePassword($newPassword);
 
-		$this->updatePasswordInternal(
+		$this->parent->updatePasswordInternal(
 			$userId,
 			$newPassword
 		);
 
-		$this->forceLogoutForUserById($userId);
+		$this->parent->forceLogoutForUserById($userId);
 	}
 
 	/**
@@ -405,7 +405,7 @@ final class Administration extends UserManager {
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
 	public function changePasswordForUserByUsername($username, $newPassword) {
-		$userData = $this->getUserDataByUsername(
+		$userData = $this->parent->getUserDataByUsername(
 			\trim($username),
 			[ 'id' ]
 		);
@@ -428,8 +428,8 @@ final class Administration extends UserManager {
 	 */
 	private function deleteUsersByColumnValue($columnName, $columnValue) {
 		try {
-			return $this->db->delete(
-				$this->makeTableNameComponents('users'),
+			return $this->parent->db->delete(
+				$this->parent->makeTableNameComponents('users'),
 				[
 					$columnName => $columnValue
 				]
@@ -455,8 +455,8 @@ final class Administration extends UserManager {
 	 */
 	private function modifyRolesForUserByColumnValue($columnName, $columnValue, callable $modification) {
 		try {
-			$userData = $this->db->selectRow(
-				'SELECT id, roles_mask FROM ' . $this->makeTableName('users') . ' WHERE ' . $columnName . ' = ?',
+			$userData = $this->parent->db->selectRow(
+				'SELECT id, roles_mask FROM ' . $this->parent->makeTableName('users') . ' WHERE ' . $columnName . ' = ?',
 				[ $columnValue ]
 			);
 		}
@@ -471,8 +471,8 @@ final class Administration extends UserManager {
 		$newRolesBitmask = $modification($userData['roles_mask']);
 
 		try {
-			$this->db->exec(
-				'UPDATE ' . $this->makeTableName('users') . ' SET roles_mask = ? WHERE id = ?',
+			$this->parent->db->exec(
+				'UPDATE ' . $this->parent->makeTableName('users') . ' SET roles_mask = ? WHERE id = ?',
 				[
 					$newRolesBitmask,
 					(int) $userData['id']
@@ -547,8 +547,8 @@ final class Administration extends UserManager {
 	 */
 	private function logInAsUserByColumnValue($columnName, $columnValue) {
 		try {
-			$users = $this->db->select(
-				'SELECT verified, id, email, username, status, roles_mask FROM ' . $this->makeTableName('users') . ' WHERE ' . $columnName . ' = ? LIMIT 2 OFFSET 0',
+			$users = $this->parent->db->select(
+				'SELECT verified, id, email, username, status, roles_mask FROM ' . $this->parent->makeTableName('users') . ' WHERE ' . $columnName . ' = ? LIMIT 2 OFFSET 0',
 				[ $columnValue ]
 			);
 		}
@@ -562,7 +562,7 @@ final class Administration extends UserManager {
 			$user = $users[0];
 
 			if ((int) $user['verified'] === 1) {
-				$this->onLoginSuccessful($user['id'], $user['email'], $user['username'], $user['status'], $user['roles_mask'], \PHP_INT_MAX, false);
+				$this->parent->onLoginSuccessful($user['id'], $user['email'], $user['username'], $user['status'], $user['roles_mask'], \PHP_INT_MAX, false);
 			}
 			else {
 				throw new EmailNotVerifiedException();

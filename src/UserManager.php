@@ -41,13 +41,13 @@ abstract class UserManager {
 	const FIELD_FORCE_LOGOUT = 'auth_force_logout';
 
 	/** @var PdoDatabase the database connection to operate on */
-	protected $db;
+	public $db;
 	/** @var string|null the schema name for all database tables used by this component */
-	protected $dbSchema;
+	public $dbSchema;
 	/** @var string the prefix for the names of all database tables used by this component */
-	protected $dbTablePrefix;
+	public $dbTablePrefix;
 
-	protected $JWTconfig;
+	public $JWTconfig;
 
 	public $user_info = [];
 
@@ -78,7 +78,7 @@ abstract class UserManager {
 	 * @param string|null $dbTablePrefix (optional) the prefix for the names of all database tables used by this component
 	 * @param string|null $dbSchema (optional) the schema name for all database tables used by this component
 	 */
-	protected function __construct($databaseConnection, $JWTconfig, $dbTablePrefix = null, $dbSchema = null) {
+	public function __construct($databaseConnection, $JWTconfig, $dbTablePrefix = null, $dbSchema = null) {
 		if ($databaseConnection instanceof PdoDatabase) {
 			$this->db = $databaseConnection;
 		}
@@ -137,7 +137,7 @@ abstract class UserManager {
 	 * @see confirmEmail
 	 * @see confirmEmailAndSignIn
 	 */
-	protected function createUserInternal($requireUniqueUsername, $email, $password, $username = null, callable $callback = null) {
+	public function createUserInternal($requireUniqueUsername, $email, $password, $username = null, callable $callback = null) {
 		\ignore_user_abort(true);
 
 		$email = self::validateEmailAddress($email);
@@ -209,7 +209,7 @@ abstract class UserManager {
 	 * @throws UnknownIdException if no user with the specified ID has been found
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	protected function updatePasswordInternal($userId, $newPassword) {
+	public function updatePasswordInternal($userId, $newPassword) {
 		$newPassword = \password_hash($newPassword, \PASSWORD_DEFAULT);
 
 		try {
@@ -241,7 +241,7 @@ abstract class UserManager {
 	 * @param int $forceLogout the counter that keeps track of forced logouts that need to be performed in the current session
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	protected function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout) {
+	public function onLoginSuccessful($userId, $email, $username, $status, $roles, $forceLogout) {
 		// save the user data in the session variables maintained by this library
 		$this->logged_in = true;
 		$this->user_info[self::FIELD_USER_ID] = (int) $userId;
@@ -265,7 +265,7 @@ abstract class UserManager {
 	 * @throws AmbiguousUsernameException if multiple users with the specified username have been found
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	protected function getUserDataByUsername($username, array $requestedColumns) {
+	public function getUserDataByUsername($username, array $requestedColumns) {
 		try {
 			$projection = \implode(', ', $requestedColumns);
 
@@ -298,7 +298,7 @@ abstract class UserManager {
 	 * @return string the sanitized email address
 	 * @throws InvalidEmailException if the email address has been invalid
 	 */
-	protected static function validateEmailAddress($email) {
+	public static function validateEmailAddress($email) {
 		if (empty($email)) {
 			throw new InvalidEmailException();
 		}
@@ -319,7 +319,7 @@ abstract class UserManager {
 	 * @return string the sanitized password
 	 * @throws InvalidPasswordException if the password has been invalid
 	 */
-	protected static function validatePassword($password) {
+	public static function validatePassword($password) {
 		if (empty($password)) {
 			throw new InvalidPasswordException();
 		}
@@ -349,7 +349,7 @@ abstract class UserManager {
 	 * @param callable $callback the function that sends the confirmation email to the user
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	protected function createConfirmationRequest($userId, $email, callable $callback) {
+	public function createConfirmationRequest($userId, $email, callable $callback) {
 		$selector = self::createRandomString(16);
 		$token = self::createRandomString(16);
 		$tokenHashed = \password_hash($token, \PASSWORD_DEFAULT);
@@ -385,7 +385,7 @@ abstract class UserManager {
 	 * @param int $userId the ID of the user to sign out
 	 * @throws AuthError if an internal problem occurred (do *not* catch)
 	 */
-	protected function forceLogoutForUserById($userId) {
+	public function forceLogoutForUserById($userId) {
 		$this->db->exec(
 			'UPDATE ' . $this->makeTableName('users') . ' SET force_logout = force_logout + 1 WHERE id = ?',
 			[ $userId ]
@@ -400,7 +400,7 @@ abstract class UserManager {
 	 * @param string $name the name of the table
 	 * @return string[] the components of the (qualified) full name of the table
 	 */
-	protected function makeTableNameComponents($name) {
+	public function makeTableNameComponents($name) {
 		$components = [];
 
 		if (!empty($this->dbSchema)) {
@@ -427,13 +427,13 @@ abstract class UserManager {
 	 * @param string $name the name of the table
 	 * @return string the (qualified) full name of the table
 	 */
-	protected function makeTableName($name) {
+	public function makeTableName($name) {
 		$components = $this->makeTableNameComponents($name);
 
 		return \implode('.', $components);
 	}
 
-	protected function issueToken($extra_data=[]) {
+	public function issueToken($extra_data=[]) {
 		$now   = new DateTimeImmutable();
 		$token = $this->JWTconfig->builder()
                 // Configures the id (jti claim)
